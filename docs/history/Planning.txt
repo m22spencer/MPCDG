@@ -1,0 +1,181 @@
+#Filename = look for "Filename" in the demos directory
+
+Unassociated projects:
+	#HxQuake_Shader_01:	Iain Surgey asked for me to integrate basic pixel shaders into his HxQuake demo. Performance was not very good due to the difficulty of merging pure bytecode and HaXe code. Turns out, he had to export all spans into memory along with associated data, this nullified any performance the optimized bytecode would give. However, in concept it did work aside from some errors with spans <16 pixels due to my quick write up.
+		NOTE: The demo does not update unless a key is being pressed, use WASD to move, and Arrow keys to look!
+
+v0.0.1 Research
+	*Many tests run, some results remain
+		[Triage]
+		My triage mapping algorithm is just plain garbage, these demos are just included for the sake of completeness. Slow slow slow slow slow. I'm embarassed.
+		#Triage_01: Demos edge generation (drag accross screen and release)
+		#Triage_02: Demos triage masking for large polygons (click to add polygons)
+		#Triage_03: Demos triage masking for small polygons (click to add polygons)
+		
+		[DistField Shader]
+		A texture shader that allows an infinite amount of data to be stored in a very small texture. This example demonstrates a 64x64 texture. It is pulled exactly from Valves Alpha-Dist-Field article, and should not be released. It is buggy, and was done for performance testing purposes.
+		#DistField_01: click to resize texture with mouse position as lower left corner.
+		
+HaXe based 3D pipeline project (F3D)
+:Description: Initial implementation in haxe to get a feel for performance
+:Focus: Fast scanline rendering in flash
+	*Branched to F3D project
+		Implemented basic transformation and rasterization algorithms to test performance
+			#F3D_Performance: Initial results, utilizing a ~1700 poly model, via fixed point rasterization.
+		Also ran tests on implementing materials and other object based values, such as object matrices.
+			#F3D_Materials: Materials test, no lighting, focus was on implementing different effects at little to no speed cost.
+	@Commit log(relevant entries)
+		!Due to increased difficulty in tracking and managing memory a method for tracking memory will be added, there will be slight overhead in the release version, so a precommit is necessary.
+		!Major Updates
+			 -New Materials
+			   :VertexPlotter -> Displays a single point at each vertex.
+			   :HighAccuracyMaterials(Debug, Z, and HOM[Highly Optimized])
+				afaik, the HA Materials are completely accurate
+				  *HighAccuracyMaterial is a debug class.
+				 clear viewport to 0x00000001 and call it: Green = Proper scanlines
+					 uncomment the scanline code, clear to 0x00, and use material color 0x000000xx to view overdraw
+
+			 -Viewport
+			   :clearTo( color ) has been changed to clear( ?color ), if no color is specified, the memory will be cleared to 0x00 in a very very fast manner
+		!A very unstable and buggy new viewport type has been added: CullViewport
+		 it only updates necessary parts of the screen, based on a grid-like system.
+		 It requires modifications to scanline alogorithms, as it can no longer work with sequential memory.
+		  +It does show significant improvement in space-ish scenes. It will dramatically decrease performance on a fully rendered skybox scene.
+		  ?This could be a way of doing fullscreen scanline rendering. Have simple geom and skyboxes rendered using native flash methods, and dynamic objects with CullViewport
+		  
+Dynamic 3D (Dy3D)
+:Description: A rewrite of F3D in pure ABC(Bytecode) for increased optimization and the ability to modify the pipeline at runtime(Shaders were the primary goal)
+:Focus: Pixel Shaders
+	#Dy3D_... Demos to showing off the pixel shader ability, scrolling the mouse wheel compiles a new pipeline with the selected shader at runtime.
+	
+	@Commit log(relevant entries)
+		!	3 Sample Shaders:
+				-MyPixelShader: UVTexture shader.
+				-MyPixelShader2: DepthBuffer.
+				-FunkyShader: DepthBuffer, uses a hack to skip every other pixel.
+			Red1x1.png:
+				-sample texture.
+			Test.hx:
+				-Setup to render to screen buffer.
+				-render {num} random triangles
+			Rasterizer.hx:
+				-first try at a command queue
+					*RDrawTri( v0, v1, v2 ) - Compiles in code to render a triangle. DEBUG ONLY. It compiles code for EACH call.
+					*RDrawVertexMemory( start, length, vertex_bytes ) - Renders a path of vertices in memory.
+						!Specify vertex_bytes based on the space between your vertices in memory.
+						!Your vertex_bytes must meet or exceed your RasterData calls.
+							eg: if you are using u, v, z, your vertex_bytes must be >= [(x+y+z+u+v)*4] = 20
+
+			MemoryCell.hx:
+				Added more memory calls.
+
+			RData.hx:
+				Contains enums for Rasterizer command queue.
+				
+		!	@@Extention of Rasterizer features.
+			MyPixelShader2.hx:
+				-Added a loop to simulate more complicated shader pass times.
+			Test.hx:
+				-Added zbuffer, configured rasterizer command demo.
+			RData.hx:
+				-New raster command path additions.
+			Rasterizer.hx
+				-Extended with command paramters to enhance build options
+		
+		!	Fixed point implementation
+			Quick addition of a float->fixed rasterizer. It's quite innacurate, but fast!
+				-Need to implement a conversion function for shaders, they shouldn't need to have different implementations for float/fixed.
+					? data.[var].get( Float/Fixed_16.16/Fixed_24.8/Fixed_Native/Int )
+
+		!	@Implementation of Mappers
+
+			-The RDrawVertexData opcode now accepts (start, len, mapper:VertexMapper)
+				-The mapper class is responsible for generating the proper [xyzuv] -> bytecode.
+				
+		!	@Beginnings of a high level shader language
+			+GLSL similar structure
+			-Broke everything else lol
+			
+		!	@Added shader language
+			!Broke PixelShader.hx's prototype high level language format.
+			+Added PixelShaderMod, this extends the pixelshader with a more functionally complete GLSL syntax.
+			 +Automatic register management.
+			 +Automatic code generation
+			 +Automatic code culling (Concept feature)
+				The pipeline will now be generated ONLY with code relevant to the pixelshader, Eg. If you don't use data.normal, the pipeline won't have any normal based code in it.
+			  Sample:
+				override function main( data:RasterizerData )
+				{
+					//display interpolated un-normalized-normals(whew, that's an odd way to say it)
+					var N = vec3( data.normal.x, data.normal.y, data.normal.z );
+					var os = vec3( .5, .5, .5 );
+					N = add( mul( N, os ), os );				//shift normal from [-1,1] range to [0->1]
+					setTexel( mem.start, vec2( data.x, data.y ), N );
+				}
+
+		!	@Added shader functions
+				+normalize, dot, saturate
+				
+C3Dex Project branch
+:Description: Bytecode experiments, and more structured Bytecode generation. For lack of better words, 'Compiler'.
+:Focus: Ease of Dynamic bytecode development, better error tracking, and less reliance on the programmer "keeping track of things in their head". Continued evolution of shaders and 3D performance.
+:IMPORTANT: Functions prior to the shader( ) call run immensely slow. No solution apart from running shader() in it's own separate enter_frame function. Still under review.
+	#C3Dex_Initial: Basic project demo, bytecode structure still messy, performance is promising. This float-fixed performance proved to be immensely faster than F3D, ~10x faster.
+	#C3Dex_HighOptimization: Accuracy completely ignored in order to pump out every single bit of speed possible, Minor rounding issues, easy to fix.
+		+This proved to be nearly 2x as fast as the initial demo. After thought and review, more performance is possible.
+		-Not as accurate
+		-Requires a cast when calculating 1/delta_[val]. This MUST be solved(may not be possible). Casts must be avoided like the plague(They are terrifyingly slow)
+	#C3Dex_UVZ: Same demo, but using gradient textures (floating point, much slower)
+	#C3Dex_BasicTexturing: Same as above, but with bitmap textures. Included to show an inconsistancy between external player, and browser players. Cause, Unknown. (Fixed in later versions, cause still unknown.)
+	#C3Dex_EdgeFind_Shader: A test implementing edge detection (similar to the effect used in Borderlands[2k Games]), Use [Down Arrow] to toggle the effect on and off.
+	
+	Several new features were added to ease the development of bytecode.
+		+Register management and typing is now 100% automatic through the use of the Reg class.
+		+ByteApplication is a helper class that can be extended allowing the developer to jump right into bytecode and have the ease of use classes at their disposal.
+		+ByteRoutine is an extendable class that allows the developer to place shared function calls in a place where any ByteApplication may access them.
+		
+PROPOSED: 
+	Variable Tracking:
+		Class to help the passing of bytecode stored information between functions.
+		Functions should be able to retrieve a storage location with a simple .get() call, instead of having to differentiate between stack, register, memory location, property... etc.
+		Eg.
+			Without variable tracking::
+			function add( ?val1:Reg, ?val2:Reg, ?val1_p:BProperty, ?val2_p:BProperty, return_as:Dynamic ):Dynamic
+			{
+				if( val1 != null ) OpReg( val1 )
+				if( val2 != null ) OpReg( val2 ) 
+				....lots more tests and conditions merely to get the variables needed! Not to mention the error checking tests... ugh
+				
+				if( return_as == BProperty )... do this....
+				else if ( return_as == Reg ) ... do this...
+				...and so on...
+				...Huge pain to do this for each function..
+			}
+			
+			With variable tracking::
+			function add( input:{val1:ByteIn, val2:ByteIn}, output:{result:ByteOut} )
+			{
+				input.val1.get( );
+				input.val2.get( );
+				..do math stuff..
+				output.result.set( );
+			}
+			
+			SO MUCH EASIER. SO MUCH MORE READABLE.
+			
+			To expand on this, we can also restrict inputs/outputs
+			
+			//Force the function to only recieve a stack item and register as inputs.
+			function add( input:{val1:ByteIn<ByteStack>, val2:ByteIn<ByteRegister>}, output:{result:ByteOut} )
+			{
+				input.val1.get( );
+				input.val2.get( );
+				..do math stuff..
+				output.result.set( );
+			}
+			add( {val1:ByteIn.reg( myValue ), val2:ByteIn.reg( myValue2 )}, {result:ByteOut.reg( myAnswer )} );		//Error: ByteIn<ByteReg> must be ByteIn<ByteStack>
+			add( {val1:ByteIn.stackConsumable(), val2:ByteIn.reg( myValue2 )}, {result:ByteOut.reg( myAnswer )} );	    //Success! We get to choose how our function recieves information, and it's never the wiser.
+			//ByteIn.stackConsumable means the stack value will be eaten, if you need it to be perserved, call ByteIn.stack() instead
+			
+			This system is not yet implemented and has flaws, but I believe it shows promise, and drastically increases code readability/reuse.
+		

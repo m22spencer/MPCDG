@@ -1,0 +1,44 @@
+Rasterization algorithms:
+	*Painters:
+		+Easy to implement
+		+Fast with non-layered objects
+		-Immensely slow with large overdraw
+	*Triage Masking:
+		+Very Fast culling
+		+Optimal pixel layout for culling
+		+Small memory requirements
+		+Zero Overdraw
+		-Requires front-to-back
+		-Hard/Slow to generate edge masks (unoptimal method, there should be a faster way)
+		-More complex rasterization process
+	*Active Edge List
+		+Scales well with resolution
+		+Zero Overdraw
+		-Requires front-to-back
+		-Massive memory requirements
+		-Lots of reads and writes
+	*S/C-Buffer
+		+Zero Overdraw
+		-Requires front-to-back
+		-Large memory requirements
+		-Uses linked lists, can become bulky and slow if pixel render is sub-optimal
+	*Binary-Buffer
+		+Zero Overdraw
+		+Faster cull search
+		-Requires front-to-back
+		-Large memory requirements
+		-Binary Tree can become slow if pixel render is sub-optimal, balancing makes this even more of an issue
+	*Z-Buffer
+		+Intersections handled automatically
+		+Memory requirements ~= framebuffer memory
+		+Easy to implement
+		+"zero-shader-overdraw" utilizing deferred rendering (Only first pass is overdraw, pixel shader has no overdraw)
+		-Slower in most situations compared to zero-overdraw algorithms
+		-If utilizing a floating raster (in flash), values must be stored as double, or converted to fixed
+			(flash natively uses doubles, and has no floats, so storing as float is (double->float) causing inaccuracies)
+
+Experiments:
+	*Bi-directional scanrow/scanline algorithm @Implemented @Not Performance tested
+		In the normal scanline algorithm, deltas for all sides ([A:Adjacent], [B:Hypotenuse], [C:Opposite]) must be calculated. Utilizing bi-directional scanline we calculate only deltas B (and some of A) in order to find a delta-x, and delta-B. This allows us to merely walk along B, and render from B to the opposite side, using our delta-x. We render left-to-right, or right-to-left depending on which side the hypotenuse is on. This has an adverse affect on memory, tests need to be done to show performance benefits/losses.
+		
+	*Selective matrix processing, eg. If it's only an X-Rotation matrix, follow this process..

@@ -1,0 +1,5 @@
+This is the very old and very outdated code for my flash scanline rasterizer (with shader support).
+
+It's quite broken due to being so outdated, but figured I'd upload it anyways.
+
+The new and more updated version will be included in hxGL, and hopefully be done fairly soon.
